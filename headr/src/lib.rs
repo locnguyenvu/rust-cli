@@ -84,8 +84,3 @@ pub fn run(config: Config) -> MyResult<()> {
     }
     Ok(())
 }
-
-
-// fn open(filename: &str) -> MyResult<Box<dyn BufRead>> {
-//     Ok(Box::new(BufReader::new(File::open(filename).unwrap())))
-// }
