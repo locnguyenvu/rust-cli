@@ -14,12 +14,6 @@ pub struct Config {
     count: bool
 }
 
-#[derive(Debug)]
-struct UniqObj {
-    text: String,
-    count: usize,
-}
-
 pub fn get_args() -> MyResult<Config> {
     let cmd = Command::new("uniqr")
         .version("0.1.0")
@@ -53,47 +47,39 @@ pub fn get_args() -> MyResult<Config> {
 }
 
 pub fn run(config: Config) -> MyResult<()> {
-    // dbg!(config);
     let mut file = open(&config.in_file)
         .map_err(|e| format!("{}: {}", config.in_file, e))?;
+    let mut out_file: Box<dyn Write> = match &config.out_file {
+        Some(filename) => Box::new(File::create(filename)?),
+        _ => Box::new(std::io::stdout())
+    };
+    let mut print = |count: usize, text: &str| -> MyResult<()> {
+        if count > 0 {
+            if config.count {
+                write!(out_file, "{:>4} {}", count, text)?
+            } else {
+                write!(out_file, "{}", text)?
+            }
+        }
+        Ok(())
+    };
     let mut line = String::new();
-    let mut output: Vec<UniqObj> = Vec::new();
-    let mut current_line = String::new();
-    let mut current_count = 0;
+    let mut previous = String::new();
+    let mut count = 0;
     loop {
         let bytes = file.read_line(&mut line)?;
         if bytes == 0 {
             break;
         }
-        if current_line.is_empty() {
-            current_line = line.clone();
+        if line.trim_end() != previous.trim_end() {
+            print(count, &previous)?;
+            previous = line.clone();
+            count = 0;
         }
-        if current_line != line {
-            output.push(UniqObj { 
-                text: current_line.clone(), 
-                count: current_count }
-            );
-            current_line = line.clone();
-            current_count = 1;
-        } else {
-            current_count += 1;
-        }
+        count += 1;
         line.clear();
     }
-    output.push(UniqObj { 
-        text: current_line, 
-        count: current_count }
-    );
-    let mut output_writer = output_writer(&config)?;
-    for elem in output.iter() {
-        let outfmt: String;
-        if config.count {
-            outfmt = format!("{:>8} {}", elem.count, elem.text);
-        } else {
-            outfmt = format!("{}", elem.text);
-        }
-        let _ = output_writer.write_all(outfmt.as_bytes());
-    }
+    print(count, &previous)?;
     Ok(())
 }
 
@@ -104,12 +90,3 @@ fn open(filename: &str) -> MyResult<Box<dyn BufRead>> {
     }
 }
 
-fn output_writer(config: &Config) -> MyResult<Box<dyn Write>> {
-    if config.out_file.is_none() {
-        Ok(Box::new(io::stdout()))
-    }
-    else {
-        let outfile = config.out_file.clone().unwrap();
-        Ok(Box::new(File::create(outfile)?))
-    }
-}
